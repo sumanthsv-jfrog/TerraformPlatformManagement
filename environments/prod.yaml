@@ -1,0 +1,2 @@
+# Existing JFrog objects are managed in existingimported.tf.
+# Add only new prod resources below. Do not repeat names already imported.
