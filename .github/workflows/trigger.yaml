@@ -1,0 +1,35 @@
+name: "Terraform Plan via OIDC"
+
+on: workflow_dispatch
+
+permissions:
+  id-token: write # Required for GitHub OIDC token generation
+  contents: read
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 1. Exchange GitHub OIDC token for short-lived JFrog Access Token
+      - name: Setup JFrog CLI for target
+        uses: jfrog/setup-jfrog-cli@v4
+        env:
+          JF_URL: https://psblr.jfrog.io
+        with:
+          oidc-provider-name: cba-github-oidc
+          oidc-audience: cba-github-oidc
+
+
+      # 2. Setup Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      # 3. Run Terraform (Provider will use exported JFROG_ACCESS_TOKEN)
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Plan
+        run: terraform plan
