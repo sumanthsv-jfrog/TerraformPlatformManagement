@@ -4,7 +4,7 @@
 # TEST key — does not touch your local terraform.tfstate file.
 # Use plan-only until you migrate state (see README).
 
-bucket  = "sum-fortescue-terraform"
+bucket  = "sum-fortescue-terraform-demo"
 key     = "jfrog-management/terraform/s3-test/terraform.tfstate"
 region  = "ap-south-1"
 encrypt = true
