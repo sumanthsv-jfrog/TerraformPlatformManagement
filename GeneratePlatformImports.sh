@@ -122,6 +122,12 @@ repo_resource() {
     LOCAL_OCI)              echo "artifactory_local_oci_repository" ;;
     LOCAL_HELMOCI)          echo "artifactory_local_helmoci_repository" ;;
     LOCAL_MACHINELEARNING)  echo "artifactory_local_machine_learning_repository" ;;
+    LOCAL_ALPINE)           echo "artifactory_local_alpine_repository" ;;
+    LOCAL_BOWER)            echo "artifactory_local_bower_repository" ;;
+    LOCAL_SWIFT)            echo "artifactory_local_swift_repository" ;;
+    LOCAL_COCOAPODS)        echo "artifactory_local_cocoapods_repository" ;;
+    LOCAL_GEMS)             echo "artifactory_local_gems_repository" ;;
+    LOCAL_YUM)              echo "artifactory_local_rpm_repository" ;;
     LOCAL_RELEASEBUNDLES)   echo "" ;; # Release Bundles are system-managed — skip
     # ── Remote ───────────────────────────────────────────────────────────────
     REMOTE_DOCKER)          echo "artifactory_remote_docker_repository" ;;
@@ -141,7 +147,13 @@ repo_resource() {
     REMOTE_OCI)             echo "artifactory_remote_oci_repository" ;;
     REMOTE_HELMOCI)         echo "artifactory_remote_helmoci_repository" ;;
     REMOTE_DEBIAN)          echo "artifactory_remote_debian_repository" ;;
-    REMOTE_YUM)             echo "artifactory_remote_rpm_repository" ;;
+    REMOTE_RPM|REMOTE_YUM)  echo "artifactory_remote_rpm_repository" ;;
+    REMOTE_ALPINE)          echo "artifactory_remote_alpine_repository" ;;
+    REMOTE_BOWER)           echo "artifactory_remote_bower_repository" ;;
+    REMOTE_CHEF)            echo "artifactory_remote_chef_repository" ;;
+    REMOTE_SWIFT)           echo "artifactory_remote_swift_repository" ;;
+    REMOTE_COCOAPODS)       echo "artifactory_remote_cocoapods_repository" ;;
+    REMOTE_GEMS)            echo "artifactory_remote_gems_repository" ;;
     REMOTE_VCS)             echo "artifactory_remote_vcs_repository" ;;
     REMOTE_HUGGINGFACEML)   echo "artifactory_remote_huggingfaceml_repository" ;;
     REMOTE_P2)              echo "artifactory_remote_p2_repository" ;;
@@ -162,6 +174,15 @@ repo_resource() {
     VIRTUAL_HELMOCI)        echo "artifactory_virtual_helmoci_repository" ;;
     VIRTUAL_DEBIAN)         echo "artifactory_virtual_debian_repository" ;;
     VIRTUAL_HUGGINGFACEML)  echo "artifactory_virtual_huggingfaceml_repository" ;;
+    VIRTUAL_ALPINE)         echo "artifactory_virtual_alpine_repository" ;;
+    VIRTUAL_BOWER)          echo "artifactory_virtual_bower_repository" ;;
+    VIRTUAL_CHEF)           echo "artifactory_virtual_chef_repository" ;;
+    VIRTUAL_CONDA)          echo "artifactory_virtual_conda_repository" ;;
+    VIRTUAL_SWIFT)          echo "artifactory_virtual_swift_repository" ;;
+    VIRTUAL_COCOAPODS)      echo "artifactory_virtual_cocoapods_repository" ;;
+    VIRTUAL_GEMS)           echo "artifactory_virtual_gems_repository" ;;
+    VIRTUAL_RPM|VIRTUAL_YUM) echo "artifactory_virtual_rpm_repository" ;;
+    # Artifactory supports virtual Cargo repos, but jfrog/artifactory has no resource for them.
     # ── Federated ────────────────────────────────────────────────
     FEDERATED_DOCKER)       echo "artifactory_federated_docker_v2_repository" ;;
     FEDERATED_MAVEN)        echo "artifactory_federated_maven_repository" ;;
@@ -173,7 +194,8 @@ repo_resource() {
     FEDERATED_GRADLE)       echo "artifactory_federated_gradle_repository" ;;
     FEDERATED_NUGET)        echo "artifactory_federated_nuget_repository" ;;
     FEDERATED_DEBIAN)       echo "artifactory_federated_debian_repository" ;;
-    FEDERATED_RPM)          echo "artifactory_federated_rpm_repository" ;;
+    FEDERATED_RPM|FEDERATED_YUM) echo "artifactory_federated_rpm_repository" ;;
+    FEDERATED_ALPINE)       echo "artifactory_federated_alpine_repository" ;;
     FEDERATED_OCI)          echo "artifactory_federated_oci_repository" ;;
     FEDERATED_TERRAFORM)    echo "artifactory_federated_terraform_module_repository" ;;
     FEDERATED_CONAN)        echo "artifactory_federated_conan_repository" ;;

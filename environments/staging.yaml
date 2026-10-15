@@ -1,0 +1,272 @@
+# New staging resources only. Imported objects stay in existingimported.tf.
+# Names use the fstg- prefix so they do not collide with imported keys.
+# Change the user password before apply.
+
+repositories:
+  - name: fstg-libs-release-local
+    package_type: maven
+    repo_type: local
+    description: Staging Maven local repository
+    xray_index: true
+
+  - name: fstg-docker-local
+    package_type: docker
+    repo_type: local
+    description: Staging Docker local repository
+    xray_index: true
+
+  - name: fstg-npm-local
+    package_type: npm
+    repo_type: local
+    description: Staging npm local repository
+    xray_index: true
+
+  - name: fstg-maven-remote
+    package_type: maven
+    repo_type: remote
+    url: https://repo1.maven.org/maven2/
+    description: Staging Maven remote proxy
+    xray_index: true
+    curated: true
+
+  - name: fstg-npm-remote
+    package_type: npm
+    repo_type: remote
+    url: https://registry.npmjs.org
+    description: Staging npm remote proxy
+    xray_index: true
+    curated: true
+
+  - name: fstg-maven-virtual
+    package_type: maven
+    repo_type: virtual
+    description: Staging Maven virtual repository
+    repositories:
+      - fstg-libs-release-local
+      - fstg-maven-remote
+    default_deployment_repo: fstg-libs-release-local
+
+  - name: fstg-npm-virtual
+    package_type: npm
+    repo_type: virtual
+    description: Staging npm virtual repository
+    repositories:
+      - fstg-npm-local
+      - fstg-npm-remote
+    default_deployment_repo: fstg-npm-local
+
+groups:
+  - name: fstg-developers
+    description: Staging developers
+
+  - name: fstg-readers
+    description: Staging read-only users
+
+users:
+  - name: fstg-alice
+    email: alice@example.com
+    password: ChangeMe#123!
+    disable_ui_access: false
+    groups:
+      - fstg-developers
+
+  - name: fstg-bob
+    email: bob@example.com
+    password: ChangeMe#123!
+    disable_ui_access: false
+    groups:
+      - fstg-readers
+
+permissions:
+  - name: fstg-developers-local
+    targets:
+      - repo: fstg-libs-release-local
+      - repo: fstg-npm-local
+      - repo: fstg-docker-local
+    groups:
+      - name: fstg-developers
+        permissions: [READ, WRITE, ANNOTATE]
+    users:
+      - name: fstg-alice
+        permissions: [READ, WRITE, ANNOTATE]
+
+  - name: fstg-readers-virtual
+    targets:
+      - repo: fstg-maven-virtual
+      - repo: fstg-npm-virtual
+    groups:
+      - name: fstg-readers
+        permissions: [READ]
+    users:
+      - name: fstg-bob
+        permissions: [READ]
+
+xray_security_policies:
+  - name: fstg-block-high-severity
+    description: Block high and critical vulnerabilities in staging repos
+    rules:
+      - name: high-severity-rule
+        priority: 1
+        min_severity: High
+        fix_version_dependant: false
+        block_download_active: true
+        block_download_unscanned: false
+        fail_build: true
+        notify_watch_recipients: true
+        notify_emails:
+          - alice@example.com
+
+xray_license_policies:
+  - name: fstg-block-gpl
+    description: Block GPL and AGPL licensed packages in staging
+    rules:
+      - name: gpl-rule
+        priority: 1
+        banned_licenses:
+          - GPL-3.0
+          - AGPL-3.0
+        allow_unknown: false
+        block_download_active: true
+        fail_build: false
+        notify_emails:
+          - alice@example.com
+
+xray_operational_risk_policies:
+  - name: fstg-eol-packages
+    description: Notify on high operational risk packages
+    rules:
+      - name: eol-rule
+        priority: 1
+        op_risk_min_risk: High
+        block_download_active: false
+        fail_build: false
+        notify_emails:
+          - alice@example.com
+
+xray_watches:
+  - name: fstg-watch
+    description: Scan staging local repos
+    active: true
+    recipients:
+      - alice@example.com
+    resources:
+      - type: repository
+        name: fstg-npm-local
+        repo_type: local
+      - type: repository
+        name: fstg-libs-release-local
+        repo_type: local
+      - type: repository
+        name: fstg-docker-local
+        repo_type: local
+    policies:
+      - name: fstg-block-high-severity
+        type: security
+      - name: fstg-block-gpl
+        type: license
+      - name: fstg-eol-packages
+        type: operational_risk
+
+curation_conditions:
+  - name: fstg-high-cvss
+    template_id: CVECVSSRange
+    params:
+      - param_id: vulnerability_cvss_score_range
+        value: [7.0, 10.0]
+      - param_id: apply_only_if_fix_is_available
+        value: true
+      - param_id: do_not_apply_for_already_existing_vulnerabilities
+        value: false
+
+curation_policies:
+  - name: fstg-block-malicious
+    condition_id: "1"
+    scope: specific_repos
+    repo_include:
+      - fstg-maven-remote
+      - fstg-npm-remote
+    policy_action: block
+    waiver_request_config: forbidden
+
+  - name: fstg-remote-audit
+    condition_id: "3"
+    scope: specific_repos
+    repo_include:
+      - fstg-maven-remote
+      - fstg-npm-remote
+    policy_action: dry_run
+    waiver_request_config: auto_approved
+    notify_emails:
+      - alice@example.com
+
+  - name: fstg-docker-curation
+    condition_id: "17"
+    scope: pkg_types
+    pkg_types_include:
+      - docker
+    policy_action: dry_run
+    waiver_request_config: manual
+    decision_owners:
+      - fstg-developers
+    notify_emails:
+      - alice@example.com
+
+  - name: fstg-high-cvss-block
+    condition_ref: fstg-high-cvss
+    scope: specific_repos
+    repo_include:
+      - fstg-npm-remote
+      - fstg-maven-remote
+    policy_action: block
+    waiver_request_config: manual
+    decision_owners:
+      - fstg-developers
+    notify_emails:
+      - alice@example.com
+
+projects:
+  - key: fstg
+    display_name: Fortescue Staging
+    description: Staging project for fstg repositories
+    email_notification: true
+    admin_privileges:
+      manage_members: true
+      manage_resources: true
+      manage_remote_repository: true
+      index_resources: true
+    repositories:
+      - sum-test-immature-npm
+    users:
+      - name: sumanth-dev
+        roles:
+          - "Project Admin"
+
+  - key: cba
+    display_name: CBA Uploads
+    description: Project for the cba-uploads repository
+    email_notification: true
+    admin_privileges:
+      manage_members: true
+      manage_resources: true
+      manage_remote_repository: true
+      index_resources: true
+    environments:
+      - UPLOADS
+    roles:
+      - name: uploader
+        environments:
+          - UPLOADS
+        actions:
+          - READ_REPOSITORY
+          - ANNOTATE_REPOSITORY
+          - DEPLOY_CACHE_REPOSITORY
+    groups:
+      - name: fstg-developers
+        roles:
+          - uploader
+    users:
+      - name: fstg-alice
+        roles:
+          - uploader
+    repositories:
+      - cba-uploads
