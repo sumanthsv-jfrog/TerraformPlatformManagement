@@ -20,21 +20,21 @@ terraform {
 }
 
 provider "artifactory" {
-  url          = "https://psblr.jfrog.io"
- # access_token = var.jfrog_token
+  url          = "http://sum2.jfps.team"
+  access_token = var.jfrog_token
 }
 
 provider "platform" {
-  url          = "https://psblr.jfrog.io"
-  #access_token = var.jfrog_token
+  url          = "http://sum2.jfps.team"
+  access_token = var.jfrog_token
 }
 
 provider "xray" {
-  url          = "https://psblr.jfrog.io"
-  #access_token = var.jfrog_token
+  url          = "http://sum2.jfps.team"
+  access_token = var.jfrog_token
 }
 
 provider "project" {
-  url          = "https://psblr.jfrog.io"
-  #access_token = var.jfrog_token
+  url          = "http://sum2.jfps.team"
+  access_token = var.jfrog_token
 }

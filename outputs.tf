@@ -1,8 +1,3 @@
-output "environment" {
-  description = "Active environment configuration"
-  value       = var.environment
-}
-
 output "repository_keys" {
   description = "Keys of repositories managed by Terraform"
   value       = module.repositories.keys

@@ -1,7 +1,54 @@
+resource "terraform_data" "project_files_scope" {
+  lifecycle {
+    precondition {
+      condition = alltrue([
+        for cfg in local.project_configs :
+        length(setsubtract(keys(cfg), ["repositories", "project"])) == 0
+      ])
+      error_message = "Files under projects/ may declare only 'repositories' and 'project'. A project's key, display_name, and admin settings belong in platform.yaml; groups, users, permissions, Xray, and curation do too."
+    }
+
+    precondition {
+      condition = alltrue([
+        for p in local.team_projects : contains(keys(local.project_stubs), p.key)
+      ])
+      error_message = "A file under projects/ manages a project key that platform.yaml does not declare. Add that project to platform.yaml's 'projects' list first."
+    }
+
+    precondition {
+      condition     = length(local.team_projects) == length(distinct([for p in local.team_projects : p.key]))
+      error_message = "Only one file under projects/ may manage a given project key."
+    }
+
+    precondition {
+      condition = alltrue([
+        for cfg in local.project_configs :
+        try(cfg.project, null) == null || alltrue([
+          for repo in try(cfg.repositories, []) :
+          startswith(repo.name, "${cfg.project.key}-")
+        ])
+      ])
+      error_message = "A repository created in a file that manages a project must have a name starting with '<project key>-'."
+    }
+
+    precondition {
+      condition = alltrue([
+        for key, stub in local.project_stubs :
+        !(contains(keys(local.team_projects_by_key), key) && length(concat(
+          try(stub.roles, []), try(stub.users, []), try(stub.groups, []), try(stub.repositories, [])
+        )) > 0)
+      ])
+      error_message = "A project already managed by a file under projects/ must not also declare roles, users, groups, or repositories directly on its platform.yaml entry. Manage that project's roles, users, groups, and repository assignment in exactly one place: platform.yaml, or its file under projects/ — not both."
+    }
+  }
+}
+
 module "repositories" {
   source = "./modules/repositories"
 
-  repositories = try(local.config.repositories, [])
+  repositories = local.project_repositories
+
+  depends_on = [terraform_data.project_files_scope]
 }
 
 module "groups" {
@@ -21,7 +68,7 @@ module "users" {
 module "projects" {
   source = "./modules/projects"
 
-  projects = try(local.config.projects, [])
+  projects = local.merged_projects
 
   depends_on = [
     module.repositories,

@@ -1,0 +1,39 @@
+# Project: fstg
+# The fstg JFrog project itself (key, display_name, admin settings) is
+# declared in platform.yaml. This file manages its custom roles and which
+# repositories are assigned to it, and may also create new repositories.
+# A file under projects/ may declare only "repositories" and "project".
+
+# New repositories this team owns. Create them here; assign existing or
+# newly created repository keys to the project under "project.repositories"
+# below.
+
+
+
+
+project:
+  key: cba
+  roles:
+    - name: uploader
+      environments: [DEV]
+      actions: [READ_REPOSITORY, ANNOTATE_REPOSITORY]
+  # Users and groups are owned by SCIM — provision and create them there,
+  # never here. This only assigns an already-existing user or group one of
+  # this project's roles (a role above, or a built-in one such as
+  # "Developer", "Contributor", "Viewer", "Project Admin").
+  groups:
+    - name: fstg-developers
+      roles:
+        - developer
+  users:
+    - name: testuser2
+      roles:
+        - uploader
+    - name: testuser
+      roles:
+        - "Project Admin"
+  # Repository keys to assign to this project (already imported or created
+  # by "repositories" above).
+  # repositories:
+  #   - amarepo
+  #   - docker-inst-local

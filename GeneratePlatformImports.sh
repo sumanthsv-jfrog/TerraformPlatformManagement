@@ -285,72 +285,72 @@ done < <(echo "$repos_json" | jq -c '.[]')
 echo -e "   ${GREEN}✅ ${repo_total} repos imported (${REPO_SKIPPED} skipped)${NC}"
 
 # ── 2. Users ──────────────────────────────────────────────────────────────────
-echo -e "⏳ Fetching users..."
+# echo -e "⏳ Fetching users..."
 
-users_json=$(api_get "/security/users")
-user_count=$(echo "$users_json" | jq 'length')
-user_total=0
-user_skipped=0
+# users_json=$(api_get "/security/users")
+# user_count=$(echo "$users_json" | jq 'length')
+# user_total=0
+# user_skipped=0
 
-echo "   Found ${user_count} users"
-echo ""                                                                              >> "$OUTPUT_FILE"
-echo "# ── Users (jfrog/artifactory) ─────────────────────────────────────────────" >> "$OUTPUT_FILE"
+# echo "   Found ${user_count} users"
+# echo ""                                                                              >> "$OUTPUT_FILE"
+# echo "# ── Users (jfrog/artifactory) ─────────────────────────────────────────────" >> "$OUTPUT_FILE"
 
-while IFS= read -r username; do
-  if echo "$SKIP_USERS" | grep -qw "$username"; then
-    echo "   ⏭️  Skipping system user: $username"
-    ((user_skipped++)) || true
-    continue
-  fi
+# while IFS= read -r username; do
+#   if echo "$SKIP_USERS" | grep -qw "$username"; then
+#     echo "   ⏭️  Skipping system user: $username"
+#     ((user_skipped++)) || true
+#     continue
+#   fi
 
-  name=$(tf_name "$username")
-  write_import "artifactory_unmanaged_user" "$name" "$username"
-  ((user_total++)) || true
+#   name=$(tf_name "$username")
+#   write_import "artifactory_unmanaged_user" "$name" "$username"
+#   ((user_total++)) || true
 
-done < <(echo "$users_json" | jq -r '.[].name')
+# done < <(echo "$users_json" | jq -r '.[].name')
 
-((TOTAL += user_total)) || true
-echo -e "   ${GREEN}✅ ${user_total} users imported (${user_skipped} system users skipped)${NC}"
+# ((TOTAL += user_total)) || true
+# echo -e "   ${GREEN}✅ ${user_total} users imported (${user_skipped} system users skipped)${NC}"
 
 # ── 3. Groups ─────────────────────────────────────────────────────────────────
-echo -e "⏳ Fetching groups..."
+# echo -e "⏳ Fetching groups..."
 
-groups_json=$(api_get "/security/groups")
-group_count=$(echo "$groups_json" | jq 'length')
-group_total=0
+# groups_json=$(api_get "/security/groups")
+# group_count=$(echo "$groups_json" | jq 'length')
+# group_total=0
 
-echo "   Found ${group_count} groups"
-echo ""                                                                              >> "$OUTPUT_FILE"
-echo "# ── Groups (jfrog/platform) ───────────────────────────────────────────────" >> "$OUTPUT_FILE"
+# echo "   Found ${group_count} groups"
+# echo ""                                                                              >> "$OUTPUT_FILE"
+# echo "# ── Groups (jfrog/platform) ───────────────────────────────────────────────" >> "$OUTPUT_FILE"
 
-while IFS= read -r groupname; do
-  name=$(tf_name "$groupname")
-  write_import "platform_group" "$name" "$groupname"
-  ((group_total++)) || true
-done < <(echo "$groups_json" | jq -r '.[].name')
+# while IFS= read -r groupname; do
+#   name=$(tf_name "$groupname")
+#   write_import "platform_group" "$name" "$groupname"
+#   ((group_total++)) || true
+# done < <(echo "$groups_json" | jq -r '.[].name')
 
-((TOTAL += group_total)) || true
-echo -e "   ${GREEN}✅ ${group_total} groups imported${NC}"
+# ((TOTAL += group_total)) || true
+# echo -e "   ${GREEN}✅ ${group_total} groups imported${NC}"
 
 # ── 4. Permissions ────────────────────────────────────────────────────────────
-echo -e "⏳ Fetching permissions..."
+# echo -e "⏳ Fetching permissions..."
 
-perms_json=$(api_get "/security/permissions")
-perm_count=$(echo "$perms_json" | jq 'length')
-perm_total=0
+# perms_json=$(api_get "/security/permissions")
+# perm_count=$(echo "$perms_json" | jq 'length')
+# perm_total=0
 
-echo "   Found ${perm_count} permissions"
-echo ""                                                                              >> "$OUTPUT_FILE"
-echo "# ── Permissions (jfrog/platform) ──────────────────────────────────────────" >> "$OUTPUT_FILE"
+# echo "   Found ${perm_count} permissions"
+# echo ""                                                                              >> "$OUTPUT_FILE"
+# echo "# ── Permissions (jfrog/platform) ──────────────────────────────────────────" >> "$OUTPUT_FILE"
 
-while IFS= read -r permname; do
-  name=$(tf_name "$permname")
-  write_import "platform_permission" "$name" "$permname"
-  ((perm_total++)) || true
-done < <(echo "$perms_json" | jq -r '.[].name')
+# while IFS= read -r permname; do
+#   name=$(tf_name "$permname")
+#   write_import "platform_permission" "$name" "$permname"
+#   ((perm_total++)) || true
+# done < <(echo "$perms_json" | jq -r '.[].name')
 
-((TOTAL += perm_total)) || true
-echo -e "   ${GREEN}✅ ${perm_total} permissions imported${NC}"
+# ((TOTAL += perm_total)) || true
+# echo -e "   ${GREEN}✅ ${perm_total} permissions imported${NC}"
 
 # ── 5. Xray Policies ──────────────────────────────────────────────────────────
 echo -e "⏳ Fetching Xray policies..."

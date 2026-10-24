@@ -1,0 +1,218 @@
+# Platform-wide JFrog objects: the JFrog projects themselves, groups,
+# permissions, Xray policies and watches, and curation. A project declared
+# here is created even if no file under projects/ manages it. A file under
+# projects/<name>.yaml attaches that project's custom roles and repository
+# assignments by referencing its key — see projects/fstg.yaml.
+#
+# Users and groups are owned by SCIM. The entries below are the ones
+# Terraform already manages from the old environments/staging.yaml.
+# Do not add new users or groups here, and do not assign them to a project
+# role here either — provision and assign people through SCIM.
+
+# Repositories not owned by any one project. A repository a project does
+# own belongs in that project's own file under projects/ instead, named
+# "<project key>-...".
+repositories:
+  - name: check-libs-release-local2
+    package_type: maven
+    repo_type: local
+    description: Staging Maven local repository
+    xray_index: true
+
+  - name: check-libs-release-local4
+    package_type: maven
+    repo_type: local
+    description: Staging Maven local repository
+    xray_index: true
+
+projects:
+  - key: fstg
+    display_name: Fortescue Staging
+    description: Staging project for fstg repositories
+    email_notification: true
+    admin_privileges:
+      manage_members: true
+      manage_resources: true
+      manage_remote_repository: true
+      index_resources: true
+
+
+  - key: cba
+    display_name: cba Staging
+    description: Staging project for cba repositories
+    email_notification: true
+    admin_privileges:
+      manage_members: true
+      manage_resources: true
+      manage_remote_repository: true
+      index_resources: true
+
+
+
+groups:
+  - name: fstg-developers
+    description: Staging developers
+
+  - name: fstg-readers
+    description: Staging read-only users
+
+users:
+  - name: fstg-alice
+    email: alice@example.com
+    password: ChangeMe#123!
+    disable_ui_access: false
+    groups:
+      - fstg-developers
+
+  # - name: fstg-bob
+  #   email: bob@example.com
+  #   password: ChangeMe#123!
+  #   disable_ui_access: false
+  #   groups:
+  #     - fstg-readers
+
+# permissions:
+#   - name: fstg-developers-local
+#     targets:
+#       - repo: fstg-libs-release-local
+#       - repo: fstg-npm-local
+#       - repo: fstg-docker-local
+#     groups:
+#       - name: fstg-developers
+#         permissions: [READ, WRITE, ANNOTATE]
+#     users:
+#       - name: fstg-alice
+#         permissions: [READ, WRITE, ANNOTATE]
+
+#   - name: fstg-readers-virtual
+#     targets:
+#       - repo: fstg-maven-virtual
+#       - repo: fstg-npm-virtual
+#     groups:
+#       - name: fstg-readers
+#         permissions: [READ]
+#     users:
+#       - name: fstg-bob
+#         permissions: [READ]
+
+xray_security_policies:
+  - name: fstg-block-high-severity
+    description: Block high and critical vulnerabilities in staging repos
+    rules:
+      - name: high-severity-rule
+        priority: 1
+        min_severity: High
+        fix_version_dependant: false
+        block_download_active: true
+        block_download_unscanned: false
+        fail_build: true
+        notify_watch_recipients: true
+        notify_emails:
+          - alice@example.com
+
+xray_license_policies:
+  - name: fstg-block-gpl
+    description: Block GPL and AGPL licensed packages in staging
+    rules:
+      - name: gpl-rule
+        priority: 1
+        banned_licenses:
+          - GPL-3.0
+          - AGPL-3.0
+        allow_unknown: false
+        block_download_active: false
+        fail_build: false
+        notify_emails:
+          - alice@example.com
+
+xray_operational_risk_policies:
+  - name: fstg-eol-packages
+    description: Notify on high operational risk packages
+    rules:
+      - name: eol-rule
+        priority: 1
+        op_risk_min_risk: High
+        block_download_active: false
+        fail_build: false
+        notify_emails:
+          - alice@example.com
+
+# xray_watches:
+#   - name: fstg-watch
+#     description: Scan staging local repos
+#     active: true
+#     recipients:
+#       - alice@example.com
+#     resources:
+#       - type: repository
+#         name: jfrog-sanity-check
+#         repo_type: local
+#       - type: repository
+#         name: maven-remote
+#         repo_type: remote
+#       - type: repository
+#         name: fstg-docker-local
+#         repo_type: local
+#     policies:
+#       - name: fstg-block-high-severity
+#         type: security
+#       - name: fstg-block-gpl
+#         type: license
+#       - name: fstg-eol-packages
+#         type: operational_risk
+
+curation_conditions:
+  - name: fstg-high-cvss
+    template_id: CVECVSSRange
+    params:
+      - param_id: vulnerability_cvss_score_range
+        value: [7.0, 10.0]
+      - param_id: apply_only_if_fix_is_available
+        value: true
+      - param_id: do_not_apply_for_already_existing_vulnerabilities
+        value: false
+
+curation_policies:
+  - name: fstg-block-malicious
+    condition_id: "1"
+    scope: specific_repos
+    repo_include:
+      - npm-remote
+    policy_action: block
+    waiver_request_config: forbidden
+
+  # - name: fstg-remote-audit
+  #   condition_id: "3"
+  #   scope: specific_repos
+  #   repo_include:
+  #     - fstg-maven-remote
+  #     - fstg-npm-remote
+  #   policy_action: dry_run
+  #   waiver_request_config: auto_approved
+  #   notify_emails:
+  #     - alice@example.com
+
+  # - name: fstg-docker-curation
+  #   condition_id: "17"
+  #   scope: pkg_types
+  #   pkg_types_include:
+  #     - docker
+  #   policy_action: dry_run
+  #   waiver_request_config: manual
+  #   decision_owners:
+  #     - fstg-developers
+  #   notify_emails:
+  #     - alice@example.com
+
+  # - name: fstg-high-cvss-block
+  #   condition_ref: fstg-high-cvss
+  #   scope: specific_repos
+  #   repo_include:
+  #     - fstg-npm-remote
+  #     - fstg-maven-remote
+  #   policy_action: block
+  #   waiver_request_config: manual
+  #   decision_owners:
+  #     - fstg-developers
+  #   notify_emails:
+  #     - alice@example.com
