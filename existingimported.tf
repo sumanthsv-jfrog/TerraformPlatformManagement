@@ -3,7 +3,7 @@
 
 # __generated__ by Terraform from "testpolicy"
 resource "xray_security_policy" "testpolicy" {
-  description = null
+  description = ""
   name        = "testpolicy"
   project_key = null
   type        = "security"
@@ -116,7 +116,7 @@ resource "artifactory_federated_generic_repository" "generec2_local" {
   property_sets            = ["artifactory"]
   proxy                    = null
   repo_layout_ref          = "simple-default"
-  xray_index               = false
+  xray_index               = true
   member {
     access_token = null # sensitive
     enabled      = true
@@ -142,7 +142,7 @@ resource "artifactory_local_generic_repository" "example_repo_local" {
   project_environments     = []
   property_sets            = null
   repo_layout_ref          = "simple-default"
-  xray_index               = false
+  xray_index               = true
 
   # Set by project_repository. Ignore so a project assignment is not undone.
   lifecycle {
@@ -168,7 +168,7 @@ resource "artifactory_federated_generic_repository" "docker_inst_local" {
   property_sets            = ["artifactory"]
   proxy                    = null
   repo_layout_ref          = "simple-default"
-  xray_index               = false
+  xray_index               = true
   member {
     access_token = null # sensitive
     enabled      = true
@@ -194,7 +194,7 @@ resource "artifactory_local_generic_repository" "newreplication2" {
   project_environments     = []
   property_sets            = ["artifactory"]
   repo_layout_ref          = "simple-default"
-  xray_index               = false
+  xray_index               = true
 
   # Set by project_repository. Ignore so a project assignment is not undone.
   lifecycle {
@@ -241,7 +241,7 @@ resource "artifactory_local_generic_repository" "generec3_local" {
   project_environments     = []
   property_sets            = ["artifactory"]
   repo_layout_ref          = "simple-default"
-  xray_index               = false
+  xray_index               = true
 
   # Set by project_repository. Ignore so a project assignment is not undone.
   lifecycle {
@@ -312,7 +312,7 @@ resource "artifactory_federated_generic_repository" "secondrepo_local" {
   property_sets            = ["artifactory"]
   proxy                    = null
   repo_layout_ref          = "simple-default"
-  xray_index               = false
+  xray_index               = true
   member {
     access_token = null # sensitive
     enabled      = true
@@ -428,7 +428,7 @@ resource "artifactory_local_generic_repository" "amarepo" {
   project_environments     = []
   property_sets            = ["artifactory"]
   repo_layout_ref          = "simple-default"
-  xray_index               = false
+  xray_index               = true
 
   # Set by project_repository (projects/fstg.yaml). Ignore so the next plan
   # does not undo the assignment.
@@ -456,7 +456,7 @@ resource "artifactory_federated_generic_repository" "tengbrepo" {
   property_sets            = ["artifactory"]
   proxy                    = null
   repo_layout_ref          = "simple-default"
-  xray_index               = false
+  xray_index               = true
   member {
     access_token = null # sensitive
     enabled      = true
@@ -533,7 +533,7 @@ resource "artifactory_local_generic_repository" "testreplication" {
   project_environments     = []
   property_sets            = ["artifactory"]
   repo_layout_ref          = "simple-default"
-  xray_index               = false
+  xray_index               = true
 
   # Set by project_repository. Ignore so a project assignment is not undone.
   lifecycle {

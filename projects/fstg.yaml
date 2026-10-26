@@ -2,7 +2,8 @@
 # The fstg JFrog project itself (key, display_name, admin settings) is
 # declared in platform.yaml. This file manages its custom roles and which
 # repositories are assigned to it, and may also create new repositories.
-# A file under projects/ may declare only "repositories" and "project".
+# A file under projects/ may declare only "repositories", "project",
+# "xray_watches", and "oidc_identity_mappings".
 
 # New repositories this team owns. Create them here; assign existing or
 # newly created repository keys to the project under "project.repositories"
@@ -42,3 +43,46 @@ project:
   repositories:
     - amarepo
     - docker-inst-local
+
+# Xray watches this team owns. Automatically scoped to project "fstg"
+# (project.key above) — every repository watched below must already be
+# assigned to fstg. The policies referenced below must already exist — see
+# xray_security_policies/xray_license_policies in platform.yaml.
+xray_watches:
+  - name: fstg-team-watch2
+    description: Scan fstg team repos
+    active: true
+    recipients:
+      - alice@example.com
+    resources:
+      - type: repository
+        name: amarepo
+        repo_type: local
+      - type: repository
+        name: docker-inst-local
+        repo_type: local
+      - type: repository
+        name: fstg-libs-release-local3
+        repo_type: local
+    policies:
+      - name: fstg-block-high-severity
+        type: security
+      - name: fstg-block-gpl
+        type: license
+
+# Maps an oidc_configurations entry (declared in platform.yaml) onto a JFrog
+# token scope. "applied-permissions/roles:fstg:..." is what actually scopes
+# this mapping to fstg — not which file it's declared in — using the
+# "uploader" role declared above. username is required for a roles scope.
+oidc_identity_mappings:
+  - name: fstg-github-actions-deploy
+    description: Deploy access for fstg's GitHub Actions
+    provider_name: fstg-github-actions
+    priority: 1
+    claims:
+      sub: "repo:Fortescue/fstg-deploy:ref:refs/heads/main"
+    token_spec:
+      scope: 'applied-permissions/roles:fstg:"uploader"'
+      username: fstg-ci
+      audience: "jfrt@*"
+      expires_in: 3600

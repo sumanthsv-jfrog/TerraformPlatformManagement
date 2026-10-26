@@ -3,9 +3,9 @@ resource "terraform_data" "project_files_scope" {
     precondition {
       condition = alltrue([
         for cfg in local.project_configs :
-        length(setsubtract(keys(cfg), ["repositories", "project"])) == 0
+        length(setsubtract(keys(cfg), ["repositories", "project", "xray_watches", "oidc_identity_mappings"])) == 0
       ])
-      error_message = "Files under projects/ may declare only 'repositories' and 'project'. A project's key, display_name, and admin settings belong in platform.yaml; groups, users, permissions, Xray, and curation do too."
+      error_message = "Files under projects/ may declare only 'repositories', 'project', 'xray_watches', and 'oidc_identity_mappings'. A project's key, display_name, and admin settings belong in platform.yaml; groups, users, permissions, Xray policies, OIDC configurations, and curation do too."
     }
 
     precondition {
@@ -100,12 +100,26 @@ module "xray_policies" {
 module "xray_watches" {
   source = "./modules/xray_watches"
 
-  watches = try(local.config.xray_watches, [])
+  watches = local.xray_watches
 
   depends_on = [
     module.repositories,
     module.xray_policies,
   ]
+}
+
+module "oidc_configurations" {
+  source = "./modules/oidc_configurations"
+
+  oidc_configurations = try(local.config.oidc_configurations, [])
+}
+
+module "oidc_identity_mappings" {
+  source = "./modules/oidc_identity_mappings"
+
+  identity_mappings = local.oidc_identity_mappings
+
+  depends_on = [module.oidc_configurations]
 }
 
 module "curation_conditions" {

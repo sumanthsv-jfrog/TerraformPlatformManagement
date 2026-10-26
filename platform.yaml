@@ -137,6 +137,30 @@ xray_operational_risk_policies:
         notify_emails:
           - alice@example.com
 
+oidc_configurations:
+  - name: fstg-github-actions
+    description: GitHub Actions OIDC for fstg
+    issuer_url: https://token.actions.githubusercontent.com
+    provider_type: GitHub
+    organization: Fortescue
+    audience: jfrog-fstg
+
+# Maps an oidc_configurations entry's claims onto a JFrog token scope.
+# provider_name above must match an oidc_configurations "name". This one has
+# no "roles:<project key>:" scope, so it stays global — see
+# projects/fstg.yaml for a project-scoped mapping instead.
+oidc_identity_mappings:
+  - name: fstg-github-actions-readers
+    description: Read-only access for fstg's GitHub Actions
+    provider_name: fstg-github-actions
+    priority: 10
+    claims:
+      sub: "repo:Fortescue/fstg-deploy:ref:refs/heads/main"
+    token_spec:
+      scope: 'applied-permissions/groups:"fstg-readers"'
+      audience: "jfrt@*"
+      expires_in: 3600
+
 # xray_watches:
 #   - name: fstg-watch
 #     description: Scan staging local repos

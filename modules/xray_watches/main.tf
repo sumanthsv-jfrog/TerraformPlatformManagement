@@ -11,6 +11,7 @@ resource "xray_watch" "this" {
   name             = each.value.name
   description      = each.value.description
   active           = each.value.active
+  project_key      = each.value.project_key
   watch_recipients = each.value.recipients
 
   dynamic "watch_resource" {

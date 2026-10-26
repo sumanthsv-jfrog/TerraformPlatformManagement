@@ -1,0 +1,491 @@
+# Reference only — Terraform never loads this file. It is not named
+# "platform.yaml" and it does not live under projects/, so neither
+# locals.tf nor main.tf ever reads it.
+#
+# It exists to show every key this repo's modules support, in one place.
+# platform.yaml and a file under projects/<project>.yaml allow different
+# top-level keys — this file is split into two sections below, one per
+# file kind. Copy the section (or just the entries) you need into the real
+# file; do not copy this whole file in as-is.
+#
+# Every example below is written to actually pass validation if you did
+# copy it in — repo_type/package_type combinations, required fields,
+# OIDC scope formats, and so on are all real, not placeholders — but
+# names, URLs, and emails are fake. Replace them before applying.
+
+# =============================================================================
+# SECTION 1 — platform.yaml
+# Allowed top-level keys: repositories, projects, groups, users, permissions,
+# xray_security_policies, xray_license_policies,
+# xray_operational_risk_policies, xray_watches, oidc_configurations,
+# oidc_identity_mappings, curation_conditions, curation_policies.
+# =============================================================================
+
+# --- repositories ------------------------------------------------------------
+# Repositories owned by no single project. A repository a project owns
+# belongs in that project's own file under projects/ instead (see Section 2).
+# repo_type is one of: local, remote, virtual, federated. package_type must
+# be one this repo_type actually supports — see modules/repositories/locals.tf
+# for the full list per repo_type (local and remote support the most
+# package types; virtual and federated support fewer).
+repositories:
+  # local: the simplest case — just name, package_type, repo_type.
+  - name: shared-generic-local
+    package_type: generic
+    repo_type: local
+    description: Generic local repository
+    xray_index: true
+
+  - name: shared-maven-local
+    package_type: maven
+    repo_type: local
+    description: Maven local repository
+    xray_index: true
+
+  # local + docker: tag_retention and max_unique_tags are Docker-specific,
+  # optional, default to 3 and 10.
+  - name: shared-docker-local
+    package_type: docker
+    repo_type: local
+    description: Docker local repository
+    xray_index: true
+    tag_retention: 5
+    max_unique_tags: 50
+
+  # remote: requires a url.
+  - name: shared-npm-remote
+    package_type: npm
+    repo_type: remote
+    description: npm remote repository
+    url: https://registry.npmjs.org
+
+  - name: shared-pypi-remote
+    package_type: pypi
+    repo_type: remote
+    description: PyPI remote repository
+    url: https://files.pythonhosted.org
+
+  # virtual: requires at least one entry in repositories (the repos it
+  # aggregates). default_deployment_repo, if set, must be one of those repos.
+  - name: shared-maven-virtual
+    package_type: maven
+    repo_type: virtual
+    description: Maven virtual repository
+    repositories:
+      - shared-maven-local
+      - shared-maven-remote
+    default_deployment_repo: shared-maven-local
+
+  # federated: requires at least one member with a url. Each member is
+  # another Artifactory instance's copy of this same repository.
+  - name: shared-docker-federated
+    package_type: docker
+    repo_type: federated
+    description: Docker federated repository
+    members:
+      - url: https://primary.jfrog.io/artifactory/shared-docker-federated
+        enabled: true
+      - url: https://dr.jfrog.io/artifactory/shared-docker-federated
+        enabled: true
+
+# --- projects ----------------------------------------------------------------
+# Every JFrog project's key, display_name, and admin settings. Created as
+# soon as it is in this list, whether or not a file under projects/ manages
+# it. roles/users/groups/repositories below are optional and only valid when
+# no file under projects/ manages this same key (see README "Creating new
+# resources" for the full rule).
+projects:
+  - key: example
+    display_name: Example Project
+    description: A project fully defined in platform.yaml, no projects/ file
+    email_notification: true
+    admin_privileges:
+      manage_members: true
+      manage_resources: true
+      manage_remote_repository: true
+      index_resources: true
+    max_storage_in_gibibytes: 100
+    block_deployments_on_limit: false
+    environments:
+      - UPLOADS
+    roles:
+      - name: uploader
+        environments: [UPLOADS]
+        actions: [READ_REPOSITORY, ANNOTATE_REPOSITORY, DEPLOY_CACHE_REPOSITORY]
+    groups:
+      - name: example-developers
+        roles: [uploader]
+    users:
+      - name: example-alice
+        roles: [uploader]
+    repositories:
+      - shared-generic-local
+
+# --- groups --------------------------------------------------------------
+# Owned by SCIM. Only the ones Terraform already manages belong here — do
+# not add new groups through this file.
+groups:
+  - name: example-developers
+    description: Example project developers
+    auto_join: false
+    admin_privileges: false
+    policy_manager: false
+    policy_viewer: false
+    watch_manager: false
+    reports_manager: false
+    manage_resources: false
+    manage_webhook: false
+
+# --- users -----------------------------------------------------------------
+# Owned by SCIM. Only the ones Terraform already manages belong here — do
+# not add new people through this file.
+users:
+  - name: example-alice
+    email: alice@example.com
+    password: ChangeMe#123!
+    admin: false
+    disable_ui_access: false
+    profile_updatable: true
+    internal_password_disabled: false
+    groups:
+      - example-developers
+
+# --- permissions -------------------------------------------------------------
+permissions:
+  - name: example-developers-local
+    targets:
+      - repo: shared-generic-local
+        include_patterns: ["**"]
+        exclude_patterns: [""]
+    groups:
+      - name: example-developers
+        permissions: [READ, WRITE, ANNOTATE]
+    users:
+      - name: example-alice
+        permissions: [READ, WRITE, ANNOTATE]
+
+# --- xray_security_policies / xray_license_policies / xray_operational_risk_policies
+xray_security_policies:
+  - name: example-block-high-severity
+    description: Block high and critical vulnerabilities
+    rules:
+      - name: high-severity-rule
+        priority: 1
+        min_severity: High
+        fix_version_dependant: false
+        applicable_cves_only: false
+        malicious_package: false
+        block_download_active: true
+        block_download_unscanned: false
+        fail_build: true
+        notify_watch_recipients: true
+        notify_emails:
+          - alice@example.com
+
+xray_license_policies:
+  - name: example-block-gpl
+    description: Block GPL and AGPL licensed packages
+    rules:
+      - name: gpl-rule
+        priority: 1
+        banned_licenses:
+          - GPL-3.0
+          - AGPL-3.0
+        allowed_licenses: []
+        allow_unknown: false
+        multi_license_permissive: false
+        block_download_active: false
+        block_download_unscanned: false
+        fail_build: false
+        notify_watch_recipients: true
+        notify_emails:
+          - alice@example.com
+
+xray_operational_risk_policies:
+  - name: example-eol-packages
+    description: Notify on high operational risk packages
+    rules:
+      - name: eol-rule
+        priority: 1
+        op_risk_min_risk: High
+        block_download_active: false
+        block_download_unscanned: false
+        fail_build: false
+        notify_watch_recipients: true
+        notify_emails:
+          - alice@example.com
+
+# --- xray_watches --------------------------------------------------------
+# A watch here stays global (unscoped to any project) — no project_key field
+# exists on this resource. See Section 2 for a project-scoped watch instead.
+xray_watches:
+  - name: example-watch
+    description: Scan shared repos
+    active: true
+    recipients:
+      - alice@example.com
+    resources:
+      - type: repository
+        name: shared-generic-local
+        repo_type: local
+      - type: repository
+        name: shared-npm-remote
+        repo_type: remote
+    policies:
+      - name: example-block-high-severity
+        type: security
+      - name: example-block-gpl
+        type: license
+      - name: example-eol-packages
+        type: operational_risk
+
+# --- oidc_configurations -----------------------------------------------------
+# platform.yaml only — not available under projects/<project>.yaml.
+# provider_type is one of: generic, GitHub, GitHubEnterprise, Azure.
+oidc_configurations:
+  # generic: any OIDC-compliant identity provider.
+  - name: example-generic-oidc
+    description: Generic OIDC provider
+    issuer_url: https://tempurl.org
+    provider_type: generic
+    audience: jfrog-generic
+    token_issuer: https://tempurl.org
+
+  # GitHub: github.com Actions.
+  - name: example-github-oidc
+    description: GitHub Actions OIDC
+    issuer_url: https://token.actions.githubusercontent.com
+    provider_type: GitHub
+    organization: example-org
+    audience: jfrog-github
+    # Only GitHub accepts false here. Leave unset (or true) to allow
+    # authentication without restriction; false enforces stricter checks.
+    enable_permissive_configuration: false
+
+  # GitHubEnterprise: a self-hosted GitHub Enterprise Server instance.
+  - name: example-github-enterprise-oidc
+    description: GitHub Enterprise Server Actions OIDC
+    issuer_url: https://token.actions.githubusercontent.com/example-org
+    provider_type: GitHubEnterprise
+    organization: example-org
+    audience: jfrog-github-enterprise
+
+  # Azure: Microsoft Entra ID (Azure AD) workload identity federation.
+  - name: example-azure-oidc
+    description: Azure workload identity OIDC
+    issuer_url: https://sts.windows.net/00000000-0000-0000-0000-000000000000/
+    provider_type: Azure
+    audience: azure-audience
+    azure_app_id: 11111111-1111-1111-1111-111111111111
+    use_default_proxy: true
+
+# --- oidc_identity_mappings ---------------------------------------------------
+# Maps an oidc_configurations entry's claims onto a JFrog token scope.
+# provider_name must match an oidc_configurations "name" above (or one
+# declared in a file under projects/, for a mapping declared there).
+#
+# claims is a plain YAML map — jsonencode'd automatically into the
+# claims_json the resource expects. It is matched against the OIDC token's
+# claims at exchange time: every key you list here must match exactly (or
+# as a pattern the provider accepts) for the mapping to apply. Common
+# claims GitHub Actions includes in its OIDC token:
+#   sub                — e.g. "repo:ORG/REPO:ref:refs/heads/main"
+#   aud                — the audience you requested (matches "audience" above)
+#   repository         — "ORG/REPO"
+#   repository_owner   — "ORG"
+#   workflow_ref       — "ORG/REPO/.github/workflows/FILE.yaml@refs/heads/main"
+#   ref, ref_type      — e.g. "refs/heads/main", "branch"
+#   environment        — the GitHub Actions environment name, if used
+#   actor, actor_id    — who triggered the run
+# token_spec.scope must start with one of: applied-permissions/user,
+# applied-permissions/admin, applied-permissions/roles:, or
+# applied-permissions/groups:. A "roles:<project key>:..." scope is what
+# actually scopes a mapping to a project — not which file declares it, and
+# not a project_key field (the provider ignores that field on this
+# resource entirely).
+oidc_identity_mappings:
+  # User scope: matches by "sub" and "aud", mints a token as a fixed user.
+  - name: example-user-mapping
+    description: Fixed-user mapping matched on sub and aud
+    provider_name: example-github-oidc
+    priority: 10
+    claims:
+      sub: "repo:example-org/example-repo:ref:refs/heads/main"
+      aud: jfrog-github
+    token_spec:
+      scope: applied-permissions/user
+      username: example-ci-user
+      audience: "*@*"
+      expires_in: 3600
+
+  # Groups scope: matches by "repository" and "repository_owner", mints a
+  # token in the given groups. username is not applicable here.
+  - name: example-groups-mapping
+    description: Groups mapping matched on repository and repository_owner
+    provider_name: example-github-oidc
+    priority: 20
+    claims:
+      repository: example-org/example-repo
+      repository_owner: example-org
+    token_spec:
+      scope: 'applied-permissions/groups:"example-developers","readers"'
+      audience: "jfrt@* jfxfer@*"
+      expires_in: 3600
+
+  # Roles scope: matches by "workflow_ref", project-scoped via the
+  # "roles:<project key>:..." scope. username is required for a roles scope.
+  - name: example-roles-mapping
+    description: Project role mapping matched on workflow_ref
+    provider_name: example-github-oidc
+    priority: 1
+    claims:
+      workflow_ref: example-org/example-repo/.github/workflows/deploy.yaml@refs/heads/main
+    token_spec:
+      scope: 'applied-permissions/roles:example:"uploader"'
+      username: example-ci
+      audience: "jfrt@* jfac@*"
+      expires_in: 1800
+
+  # username_pattern: maps the OIDC user onto an Artifactory username
+  # pattern instead of a fixed username. Mutually exclusive with scope's
+  # fixed username.
+  - name: example-username-pattern-mapping
+    description: Username derived from the actor claim
+    provider_name: example-github-oidc
+    priority: 30
+    claims:
+      repository_owner: example-org
+    token_spec:
+      username_pattern: "{{actor}}"
+      audience: "*@*"
+      expires_in: 3600
+
+  # groups_pattern: maps an OIDC claim onto Artifactory groups by pattern.
+  - name: example-groups-pattern-mapping
+    description: Groups derived from a custom claim
+    provider_name: example-generic-oidc
+    priority: 40
+    claims:
+      sub: "example-subject"
+    token_spec:
+      groups_pattern: "{{group}}"
+      audience: "*@*"
+      expires_in: 3600
+
+# --- curation_conditions / curation_policies ----------------------------------
+curation_conditions:
+  - name: example-high-cvss
+    template_id: CVECVSSRange
+    params:
+      - param_id: vulnerability_cvss_score_range
+        value: [7.0, 10.0]
+      - param_id: apply_only_if_fix_is_available
+        value: true
+      - param_id: do_not_apply_for_already_existing_vulnerabilities
+        value: false
+
+curation_policies:
+  # Built-in condition: condition_id is a numeric string JFrog assigns.
+  - name: example-block-malicious
+    condition_id: "1"
+    scope: all_repos
+    policy_action: block
+    waiver_request_config: forbidden
+
+  # Custom condition: condition_ref references a curation_conditions name
+  # instead (resolved to its numeric id automatically).
+  - name: example-high-cvss-block
+    condition_ref: example-high-cvss
+    scope: specific_repos
+    repo_include:
+      - shared-npm-remote
+    policy_action: dry_run
+    waiver_request_config: manual
+    decision_owners:
+      - example-developers
+    notify_emails:
+      - alice@example.com
+
+  - name: example-docker-curation
+    condition_id: "17"
+    scope: pkg_types
+    pkg_types_include:
+      - docker
+    policy_action: dry_run
+    waiver_request_config: auto_approved
+
+# =============================================================================
+# SECTION 2 — projects/<project>.yaml
+# One file per project team. Allowed top-level keys: repositories, project,
+# xray_watches, oidc_identity_mappings. Nothing else — groups, users,
+# permissions, Xray policies, OIDC configurations, and curation stay in
+# platform.yaml.
+# =============================================================================
+
+# repositories: new repositories this project team owns. Each name must
+# start with "<project key>-". Automatically assigned to this file's
+# project — no need to repeat them under project.repositories.
+repositories:
+  - name: example-uploads-local
+    package_type: generic
+    repo_type: local
+    description: Example project's uploads repository
+    xray_index: true
+
+# project: this file's one project, referencing a key already declared in
+# platform.yaml's "projects" list.
+project:
+  key: example
+  # Custom roles for this project.
+  roles:
+    - name: uploader
+      environments: [UPLOADS]
+      actions: [READ_REPOSITORY, ANNOTATE_REPOSITORY, DEPLOY_CACHE_REPOSITORY]
+  # Assigns an already-existing (SCIM-owned) user or group one of this
+  # project's roles, or a built-in role: Developer, Contributor, Viewer,
+  # Project Admin. Never creates the user or group itself.
+  groups:
+    - name: example-developers
+      roles: [uploader]
+  users:
+    - name: example-alice
+      roles: [uploader]
+  # Existing or imported repository keys to assign, beyond the ones this
+  # file creates itself above.
+  repositories:
+    - example-uploads-local
+
+# xray_watches: automatically scoped to this file's project.key — every
+# repository or build watched must already be assigned to that project.
+xray_watches:
+  - name: example-team-watch
+    description: Scan the example project's own repos
+    active: true
+    recipients:
+      - alice@example.com
+    resources:
+      - type: repository
+        name: example-uploads-local
+        repo_type: local
+    policies:
+      - name: example-block-high-severity
+        type: security
+
+# oidc_identity_mappings: same shape as Section 1's. provider_name still
+# references an oidc_configurations entry from platform.yaml — a project
+# file cannot declare oidc_configurations itself. Use a
+# "roles:<project key>:..." scope (see example-roles-mapping above) to
+# actually scope a mapping to this project.
+oidc_identity_mappings:
+  - name: example-deploy-mapping
+    description: Deploy access for the example project's GitHub Actions
+    provider_name: example-github-oidc
+    priority: 1
+    claims:
+      repository: example-org/example-repo
+      workflow_ref: example-org/example-repo/.github/workflows/deploy.yaml@refs/heads/main
+    token_spec:
+      scope: 'applied-permissions/roles:example:"uploader"'
+      username: example-ci
+      audience: "jfrt@*"
+      expires_in: 3600

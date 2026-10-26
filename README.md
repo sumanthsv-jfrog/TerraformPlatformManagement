@@ -19,6 +19,7 @@ Use a separate clone for each branch. Switching branches in one working tree lea
 | `platform.yaml` | Platform-wide objects: the JFrog projects themselves (key, display_name, admin settings), groups, users, permissions, Xray policies and watches, and curation. A project declared here is created even if no file under `projects/` manages it. Users and groups are owned by SCIM; this file only keeps the ones Terraform already manages. |
 | `modules/` | Turns the YAML into Terraform resources. |
 | `main.tf` | Passes the project files and `platform.yaml` into the modules. |
+| `example.yaml` | Reference only — Terraform never loads it. Every key either file supports, in one place, split into a `platform.yaml` section and a `projects/<project>.yaml` section. Copy what you need from it; see "Creating new resources" below for the rules in prose. |
 
 Every plan loads every file under `projects/` plus `platform.yaml`, together with every resource in `existingimported.tf`. On a shared checkout that file is the staging import, which is why staging and prod should be separate branches.
 
@@ -27,7 +28,7 @@ Every plan loads every file under `projects/` plus `platform.yaml`, together wit
 | Provider | Source | Version | Manages |
 |----------|--------|---------|---------|
 | artifactory | `jfrog/artifactory` | `~> 12.0` | Repositories, users |
-| platform | `jfrog/platform` | `~> 2.0` | Groups, permissions |
+| platform | `jfrog/platform` | `~> 2.0` | Groups, permissions, OIDC configurations, OIDC identity mappings |
 | xray | `jfrog/xray` | `~> 3.1` | Xray policies, watches, curation |
 | project | `jfrog/project` | `~> 1.9.9` | Projects, members, roles, environments, repository assignment |
 
@@ -54,9 +55,12 @@ Every plan loads every file under `projects/` plus `platform.yaml`, together wit
 │   ├── xray_policies/
 │   ├── xray_watches/
 │   ├── curation_conditions/
-│   └── curation_policies/
-├── platform.yaml                 # groups, users, permissions, Xray, curation
-└── projects/
+│   ├── curation_policies/
+│   ├── oidc_configurations/
+│   └── oidc_identity_mappings/
+├── platform.yaml                 # groups, users, permissions, Xray, curation, all projects
+├── example.yaml                  # reference only — every supported key, not loaded by Terraform
+└── projects/                     # project-specific
     ├── fstg.yaml
     └── cba.yaml
 ```
@@ -143,6 +147,8 @@ Run `terraform init` again, then `terraform plan`. It should still show no chang
 
 ## Creating new resources
 
+See `example.yaml` at the repo root for every key below shown as a working, validated example — including every repository type, all four `oidc_configurations` provider types, and `oidc_identity_mappings` with several different claim and scope shapes (`sub`, `aud`, `repository`, `repository_owner`, `workflow_ref`, user/groups/roles scopes, `username_pattern`, `groups_pattern`). It's a reference only; Terraform never loads it.
+
 Two files between them declare everything new. `platform.yaml` holds objects that are platform-wide or exist independently of any one project. `projects/<project>.yaml` — one file per project team — holds one project's own roles, role assignments, repository assignments, and any new repositories that team owns.
 
 ### What goes in `platform.yaml`
@@ -154,8 +160,11 @@ Two files between them declare everything new. `platform.yaml` holds objects tha
 | `repositories` | Repositories owned by no single project — shared across teams, or not yet assigned to one. |
 | `groups`, `users` | Only the ones Terraform already manages from the import. Groups and users are owned by SCIM — do not add new people or groups here. |
 | `permissions` | |
-| `xray_security_policies`, `xray_license_policies`, `xray_operational_risk_policies`, `xray_watches` | |
+| `xray_security_policies`, `xray_license_policies`, `xray_operational_risk_policies` | |
+| `xray_watches` | Watches not scoped to any one project. A watch here has no `project_key` — see `xray_watches` under `projects/<project>.yaml` below for a project-scoped watch instead. |
 | `curation_conditions`, `curation_policies` | |
+| `oidc_configurations` | OIDC identity provider configurations (`GitHub`, `GitHubEnterprise`, `Azure`, or `generic`). `platform.yaml` only — not available under `projects/<project>.yaml`. |
+| `oidc_identity_mappings` | Maps an OIDC configuration's claims to a JFrog token scope. Same shape as `oidc_identity_mappings` under `projects/<project>.yaml` below. |
 
 ### What goes in `projects/<project>.yaml`
 
@@ -166,12 +175,14 @@ Two files between them declare everything new. `platform.yaml` holds objects tha
 | `project.roles` | Custom roles for this project. |
 | `project.users`, `project.groups` | Assigns an already-existing user or group one of this project's roles, or a built-in role (`Developer`, `Contributor`, `Viewer`, `Project Admin`). SCIM still owns creating the user or group itself — this only assigns a role to one that already exists. |
 | `project.repositories` | Existing or imported repository keys to assign to this project, beyond the ones this file creates itself. |
+| `xray_watches` | Xray watches this project team owns. Same shape as `xray_watches` in `platform.yaml`, with one difference: a watch declared here is automatically scoped to this file's `project.key` — every repository or build it watches must already be assigned to that project. A watch name must be unique across `platform.yaml` and every file under `projects/`. Not available for `xray_security_policies`, `xray_license_policies`, or `xray_operational_risk_policies` — those stay in `platform.yaml` only. |
+| `oidc_identity_mappings` | Maps an OIDC configuration's claims to a JFrog token scope — `provider_name` references an `oidc_configurations` entry from `platform.yaml` (that resource itself cannot be declared here). What actually scopes a mapping to a project is `token_spec.scope` set to `applied-permissions/roles:<project key>:"<role>"`, not which file declares it — a mapping with a `user`/`admin`/`groups` scope stays global no matter which file it's in. A mapping name must be unique across `platform.yaml` and every file under `projects/`. |
 
 A project's roles, user/group role assignments, and repository assignment live in exactly one of those two places — directly on its entry in `platform.yaml`, or in its file under `projects/` — never both. The plan fails if a project already managed by a file under `projects/` also declares `roles`, `users`, `groups`, or `repositories` directly in `platform.yaml`.
 
 A repository a project team owns belongs in that project's file under `projects/` — either an existing project's file or a new one named for that project. Do not add a second `.tf` file for it, and do not copy an imported name into the YAML. The modules would treat that name as a new object and JFrog would return "already exists".
 
-A file under `projects/` may declare only `repositories` and `project` at the top level — nothing else. The plan fails if it declares anything else, if a repository name is also declared in another file under `projects/`, if more than one file manages the same project key, or if a file manages a project key that `platform.yaml` does not declare. A repository several projects need lives in its own file under `projects/` (for example `projects/shared.yaml`) so it is declared once.
+A file under `projects/` may declare only `repositories`, `project`, `xray_watches`, and `oidc_identity_mappings` at the top level — nothing else. The plan fails if it declares anything else, if a repository, watch, or identity mapping name is also declared in another file under `projects/` or in `platform.yaml`, if more than one file manages the same project key, or if a file manages a project key that `platform.yaml` does not declare. A repository several projects need lives in its own file under `projects/` (for example `projects/shared.yaml`) so it is declared once.
 
 A repository created in a file that also has a `project:` block must have a name starting with `<project key>-`, for example `fstg-npm-local` in `projects/fstg.yaml`. The plan fails otherwise. A file with no `project:` block (a shared repositories file) has no such restriction.
 
@@ -248,8 +259,6 @@ projects:
         roles: [uploader]
     repositories: [Fortescue-uploads]
 ```
-
-A project cannot create a new repository from `platform.yaml` the way a file under `projects/` can with its own `repositories:` list — `platform.yaml`'s top-level `repositories:` key only creates repositories owned by no project. A project that needs to create its own repositories needs a file under `projects/`.
 
 JFrog stores a custom project environment as `<project key>-<name>`. The YAML uses the short name `UPLOADS`. The projects module sends `Fortescue-UPLOADS` on the role. `DEV` and `PROD` are not prefixed.
 
