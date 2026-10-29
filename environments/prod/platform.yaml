@@ -13,13 +13,13 @@
 # own belongs in that project's own file under projects/ instead, named
 # "<project key>-...".
 repositories:
-  - name: check-libs-release-local2
+  - name: check-libs-release-local22
     package_type: maven
     repo_type: local
     description: Staging Maven local repository
     xray_index: true
 
-  - name: check-libs-release-local4
+  - name: check-libs-release-local43
     package_type: maven
     repo_type: local
     description: Staging Maven local repository
@@ -36,9 +36,8 @@ projects:
       manage_remote_repository: true
       index_resources: true
 
-
-  - key: cba
-    display_name: cba Staging
+  - key: fmgint
+    display_name: fmgint
     description: Staging project for cba repositories
     email_notification: true
     admin_privileges:
@@ -49,20 +48,32 @@ projects:
 
 
 
+  # - key: cba
+  #   display_name: cba Staging
+  #   description: Staging project for cba repositories
+  #   email_notification: true
+  #   admin_privileges:
+  #     manage_members: true
+  #     manage_resources: true
+  #     manage_remote_repository: true
+  #     index_resources: true
+
+
+
 groups:
-  - name: fstg-developers
+  - name: fstg-developers2
     description: Staging developers
 
-  - name: fstg-readers
+  - name: fstg-readers2
     description: Staging read-only users
 
 users:
-  - name: fstg-alice
-    email: alice@example.com
+  - name: fstg-alice2
+    email: alice@example2.com
     password: ChangeMe#123!
     disable_ui_access: false
     groups:
-      - fstg-developers
+      - fstg-developers2
 
   # - name: fstg-bob
   #   email: bob@example.com
@@ -96,7 +107,7 @@ users:
 #         permissions: [READ]
 
 xray_security_policies:
-  - name: fstg-block-high-severity
+  - name: fstg-block-high-severity1
     description: Block high and critical vulnerabilities in staging repos
     rules:
       - name: high-severity-rule
@@ -111,7 +122,7 @@ xray_security_policies:
           - alice@example.com
 
 xray_license_policies:
-  - name: fstg-block-gpl
+  - name: fstg-block-gpl1
     description: Block GPL and AGPL licensed packages in staging
     rules:
       - name: gpl-rule
@@ -126,7 +137,7 @@ xray_license_policies:
           - alice@example.com
 
 xray_operational_risk_policies:
-  - name: fstg-eol-packages
+  - name: fstg-eol-packages1
     description: Notify on high operational risk packages
     rules:
       - name: eol-rule
@@ -185,25 +196,25 @@ oidc_identity_mappings:
 #       - name: fstg-eol-packages
 #         type: operational_risk
 
-curation_conditions:
-  - name: fstg-high-cvss
-    template_id: CVECVSSRange
-    params:
-      - param_id: vulnerability_cvss_score_range
-        value: [7.0, 10.0]
-      - param_id: apply_only_if_fix_is_available
-        value: true
-      - param_id: do_not_apply_for_already_existing_vulnerabilities
-        value: false
+# curation_conditions:
+#   - name: fstg-high-cvss
+#     template_id: CVECVSSRange
+#     params:
+#       - param_id: vulnerability_cvss_score_range
+#         value: [7.0, 10.0]
+#       - param_id: apply_only_if_fix_is_available
+#         value: true
+#       - param_id: do_not_apply_for_already_existing_vulnerabilities
+#         value: false
 
-curation_policies:
-  - name: fstg-block-malicious
-    condition_id: "1"
-    scope: specific_repos
-    repo_include:
-      - npm-remote
-    policy_action: block
-    waiver_request_config: forbidden
+# curation_policies:
+#   - name: fstg-block-malicious
+#     condition_id: "1"
+#     scope: specific_repos
+#     repo_include:
+#       - npm-remote
+#     policy_action: block
+#     waiver_request_config: forbidden
 
   # - name: fstg-remote-audit
   #   condition_id: "3"

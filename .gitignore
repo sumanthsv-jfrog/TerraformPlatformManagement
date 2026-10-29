@@ -6,4 +6,6 @@ terraform.tfstate.backup
 .terraform.tfstate.lock.info
 backend-configs/*.hcl
 !backend-configs/*.example.hcl
-!backend-configs/s3.hcl
+!backend-configs/s3-prod.hcl
+!backend-configs/s3-staging.hcl
+environments/*/.import-stash/

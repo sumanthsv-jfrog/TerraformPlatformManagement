@@ -1,0 +1,14 @@
+# Platform-wide JFrog objects for the staging JPD (http://172.18.96.199:8082/).
+# Nothing on this JPD has been imported into Terraform yet — everything
+# declared here (and in projects/staging/*.yaml) is created fresh. Follow the
+# same structure as platform.prod.yaml; see example.yaml for every supported
+# field (repositories, projects, groups, users, permissions, Xray policies,
+# Xray watches, OIDC configurations/identity mappings, curation).
+repositories:
+  - name: check-libs-release-local22
+    package_type: maven
+    repo_type: local
+    description: Staging Maven local repository
+    xray_index: true
+
+projects: []

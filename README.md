@@ -2,26 +2,47 @@
 
 Manage JFrog Artifactory, Xray, Curation, and Projects as code. Existing platform objects stay in `existingimported.tf`. New objects are declared in YAML and created by the modules.
 
-The JFrog instance is `https://jfrog_url.jfrog.io`. Terraform state is stored in S3.
+Terraform state is stored in S3.
 
-## Branches
+## Environments
 
-Keep staging and prod on separate GitHub branches. The staging `existingimported.tf` belongs on `staging` only. Do not merge it into `prod`. Prod gets its own import, its own `projects/` and `platform.yaml` content, and its own S3 state key, so a staging apply cannot change production.
+Two JPDs are managed, each from its own completely independent Terraform root module — own state file, own provider credentials, own `.tf` config, own YAML. There is no sharing between them at all; a `staging` apply cannot see, plan, or touch anything in `prod`, and vice versa.
 
-Use a separate clone for each branch. Switching branches in one working tree leaves `terraform.tfvars` and `backend-configs/s3.hcl` in place.
+| Environment | Directory | JPD | Imported? |
+|---|---|---|---|
+| `prod` | `environments/prod/` | `http://sum2.jfps.team` | Yes — `environments/prod/existingimported.tf` |
+| `staging` | `environments/staging/` | `http://172.18.96.199:8082/` | No — everything there is created fresh by Terraform |
+
+Each environment directory is a full, self-contained root module:
+
+```
+environments/<env>/
+├── providers.tf          # that environment's JFrog URL + token, unaliased
+├── variables.tf          # variable "jfrog_token"
+├── backend.tf            # S3 backend, configured at init time
+├── main.tf                # wires platform.yaml + projects/ into ../../modules/*
+├── locals.tf
+├── outputs.tf
+├── platform.yaml
+├── projects/
+│   └── <project>.yaml
+└── existingimported.tf   # prod only
+```
+
+Both environments call the exact same shared `modules/` at the repo root (`source = "../../modules/<name>"`) — the modules themselves have no knowledge of which environment is calling them. Run every `terraform` command from inside the relevant `environments/<env>/` directory. Adding a third JPD later means copying one of these directories, pointing its `providers.tf` at the new JPD, giving it its own `backend-configs/s3-<env>.hcl` state key, and writing its own `platform.yaml`/`projects/`.
 
 ## Overview
 
 | Path | Purpose |
 |------|---------|
-| `existingimported.tf` | Configuration for the resources imported from JFrog. Do not delete this file. |
-| `projects/<project>.yaml` | One file per project team. May create new repositories, and may manage one project's custom roles and repository assignments by referencing its key. Every file under `projects/` is loaded into the one plan; the directory is optional. |
-| `platform.yaml` | Platform-wide objects: the JFrog projects themselves (key, display_name, admin settings), groups, users, permissions, Xray policies and watches, and curation. A project declared here is created even if no file under `projects/` manages it. Users and groups are owned by SCIM; this file only keeps the ones Terraform already manages. |
-| `modules/` | Turns the YAML into Terraform resources. |
-| `main.tf` | Passes the project files and `platform.yaml` into the modules. |
+| `environments/<env>/existingimported.tf` | Configuration for that environment's resources imported from JFrog. Only `prod` has one so far. Do not delete this file. |
+| `environments/<env>/projects/<project>.yaml` | One file per project team, within one environment. May create new repositories, and may manage one project's custom roles and repository assignments by referencing its key. Every file under that environment's `projects/` is loaded into that environment's plan only; the directory is optional. |
+| `environments/<env>/platform.yaml` | Platform-wide objects for that one environment: the JFrog projects themselves (key, display_name, admin settings), groups, users, permissions, Xray policies and watches, and curation. A project declared here is created even if no file under `projects/` manages it. Users and groups are owned by SCIM; `environments/prod/platform.yaml` only keeps the ones Terraform already manages from the import. |
+| `modules/` | Turns the YAML into Terraform resources. Shared by every environment — no environment-specific logic lives here. |
+| `environments/<env>/main.tf` | Passes that environment's project files and `platform.yaml` into the shared modules. |
 | `example.yaml` | Reference only — Terraform never loads it. Every key either file supports, in one place, split into a `platform.yaml` section and a `projects/<project>.yaml` section. Copy what you need from it; see "Creating new resources" below for the rules in prose. |
 
-Every plan loads every file under `projects/` plus `platform.yaml`, together with every resource in `existingimported.tf`. On a shared checkout that file is the staging import, which is why staging and prod should be separate branches.
+Each environment's plan loads only that environment's `projects/*.yaml`, `platform.yaml`, and (for prod) `existingimported.tf` — nothing from the other environment is ever in scope.
 
 ## Providers
 
@@ -32,21 +53,22 @@ Every plan loads every file under `projects/` plus `platform.yaml`, together wit
 | xray | `jfrog/xray` | `~> 3.1` | Xray policies, watches, curation |
 | project | `jfrog/project` | `~> 1.9.9` | Projects, members, roles, environments, repository assignment |
 
+Each environment's `providers.tf` declares all four, unaliased, pointed at that environment's own JFrog URL and reading that environment's own `var.jfrog_token`. Modules never reference a provider alias — each environment just has its own ordinary default providers, and modules use whichever one the calling root module (`environments/prod/` or `environments/staging/`) has configured.
+
 ## Repository structure
 
 ```
 .
-├── providers.tf
-├── variables.tf
-├── terraform.tfvars              # gitignored — JFrog token
-├── backend.tf                    # S3 backend
-├── backend-configs/s3.hcl        # bucket, key, region — gitignored
 ├── GeneratePlatformImports.sh
-├── existingimported.tf           # imported resources — keep this file
-├── main.tf
-├── locals.tf
-├── outputs.tf
-├── modules/
+├── stash-for-import.sh                  # moves an env's module config out of the way before import
+├── restore-after-import.sh              # moves it back after import
+├── add-repo-lifecycle.sh                # adds ignore_changes = [project_key, project_environments] to every imported repo
+├── backend-configs/
+│   ├── s3-prod.hcl                     # bucket, key, region — gitignored
+│   ├── s3-prod.example.hcl
+│   ├── s3-staging.hcl                  # gitignored
+│   └── s3-staging.example.hcl
+├── modules/                             # shared by every environment
 │   ├── repositories/
 │   ├── groups/
 │   ├── users/
@@ -58,11 +80,31 @@ Every plan loads every file under `projects/` plus `platform.yaml`, together wit
 │   ├── curation_policies/
 │   ├── oidc_configurations/
 │   └── oidc_identity_mappings/
-├── platform.yaml                 # groups, users, permissions, Xray, curation, all projects
-├── example.yaml                  # reference only — every supported key, not loaded by Terraform
-└── projects/                     # project-specific
-    ├── fstg.yaml
-    └── cba.yaml
+├── example.yaml                         # reference only — every supported key, not loaded by Terraform
+└── environments/
+    ├── prod/
+    │   ├── providers.tf                 # sum2.jfps.team, var.jfrog_token
+    │   ├── variables.tf
+    │   ├── backend.tf
+    │   ├── terraform.tfvars             # gitignored — prod JFrog token
+    │   ├── main.tf
+    │   ├── locals.tf
+    │   ├── outputs.tf
+    │   ├── existingimported.tf          # imported resources — keep this file
+    │   ├── platform.yaml                # groups, users, permissions, Xray, curation, all projects
+    │   └── projects/
+    │       ├── fstg.yaml
+    │       └── cba.yaml
+    └── staging/
+        ├── providers.tf                 # 172.18.96.199:8082, var.jfrog_token
+        ├── variables.tf
+        ├── backend.tf
+        ├── terraform.tfvars             # gitignored — staging JFrog token
+        ├── main.tf
+        ├── locals.tf
+        ├── outputs.tf
+        ├── platform.yaml                # nothing imported here yet
+        └── projects/                    # empty until staging has projects
 ```
 
 ## Prerequisites
@@ -77,51 +119,90 @@ The JFrog token does not authenticate to S3. S3 uses AWS keys.
 
 ## Setup
 
-### 1. Token and URL
+Every command in this section runs from inside `environments/prod/` or `environments/staging/` — not the repo root.
 
-`providers.tf` points all four providers at `https://jfrog_url.jfrog.io` and reads `var.jfrog_token`.
+### 1. Tokens and URLs
+
+Each environment's own `providers.tf` points its (unaliased) providers at that environment's JFrog URL, reading that environment's own `var.jfrog_token`. Put the matching token in a `terraform.tfvars` inside that same environment directory:
 
 ```hcl
-jfrog_token = "your-access-token"
+# environments/prod/terraform.tfvars
+jfrog_token = "your-prod-access-token"
 ```
 
-Do not commit `terraform.tfvars`.
+```hcl
+# environments/staging/terraform.tfvars
+jfrog_token = "your-staging-access-token"
+```
+
+Both need admin permissions on their respective JPD. Do not commit either `terraform.tfvars`.
 
 ### 2. S3 backend
 
 ```bash
+cd environments/prod   # or environments/staging
+
 export AWS_ACCESS_KEY_ID="your-access-key-id"
 export AWS_SECRET_ACCESS_KEY="your-secret-access-key"
 export AWS_DEFAULT_REGION="ap-south-1"
 
-terraform init -backend-config=backend-configs/s3.hcl
+terraform init -backend-config=../../backend-configs/s3-prod.hcl   # or s3-staging.hcl
 ```
 
-`backend-configs/s3.hcl` supplies the bucket, state key, and region. Give the prod branch a different key from staging. If the modules were added after the first init, run `terraform init` again so Terraform registers them.
+`backend-configs/s3-prod.hcl` / `s3-staging.hcl` each supply their own bucket, state key, and region — two completely separate state files, one per environment. If the modules were added after the first init, run `terraform init` again so Terraform registers them.
 
 ## Importing existing resources
 
-Run this in a directory that does not yet contain `main.tf`. A `main.tf` that declares the same names will try to create them a second time.
+This whole section applies to `environments/prod/` only — staging has nothing to import. Adding a brand-new JPD (like staging was) means skipping straight to "Creating new resources" below: write that environment's `platform.yaml` and `projects/*.yaml`, then `terraform apply` from inside its directory.
+
+`terraform plan -generate-config-out` needs to run in a directory that does not already declare the same resources — if `main.tf` is still there wiring in the shared modules for the same objects, Terraform tries to create a second copy instead of adopting the real ones. Two scripts at the repo root automate moving that config out of the way and back, so this is a fixed, repeatable sequence rather than something to remember by hand:
+
+- `./stash-for-import.sh <env>` — moves `main.tf`, `locals.tf`, `outputs.tf`, `platform.yaml`, and `projects/` out of `environments/<env>/` into `environments/<env>/.import-stash/` (gitignored, never read by Terraform since it's a subdirectory Terraform doesn't scan). `providers.tf`, `variables.tf`, and `backend.tf` are left in place — the import step still needs them.
+- `./restore-after-import.sh <env>` — moves those same files back. It refuses to run while `imports.tf` still exists, so it can't be run too early by mistake.
+
+Run both from the repo root. Everything below runs with `prod` as `<env>`.
+
+### 0. Stash the module config
+
+```bash
+./stash-for-import.sh prod
+```
 
 ### 1. Generate import blocks
 
 ```bash
-export ARTIFACTORY_URL="https://jfrog_url.jfrog.io"
-export ARTIFACTORY_TOKEN="your-access-token"
+cd environments/prod
 
-chmod +x GeneratePlatformImports.sh
-./GeneratePlatformImports.sh
+export ARTIFACTORY_URL="http://sum2.jfps.team"
+export ARTIFACTORY_TOKEN="your-prod-access-token"
+
+../../GeneratePlatformImports.sh
 ```
 
-This writes `imports.tf`. Repository keys that differ only by `.`, `-`, and `_` collapse to the same Terraform name. The script keeps the first and skips the rest.
+This writes `imports.tf` in `environments/prod/`. Repository keys that differ only by `.`, `-`, and `_` collapse to the same Terraform name. The script keeps the first and skips the rest.
 
 Package types with no Terraform resource are skipped. Virtual Cargo is one of those. Release Bundles and BuildInfo repositories are skipped because they are system-managed.
 
 ### 2. Generate the configuration and import
 
+Still inside `environments/prod/`:
+
 ```bash
-terraform init -backend-config=backend-configs/s3.hcl
+terraform init -backend-config=../../backend-configs/s3-prod.hcl
 terraform plan -generate-config-out=existingimported.tf
+```
+
+`-generate-config-out` only ever writes real attribute values — it never adds a `lifecycle` block. Every `artifactory_*_repository` resource it just wrote hardcodes `project_key`/`project_environments` as they are right now (usually `null`/`[]`), and without `ignore_changes` on those two, the next plan after you assign that repo to a project would try to silently revert it. From the repo root, before applying:
+
+```bash
+cd ../..
+./add-repo-lifecycle.sh prod
+cd environments/prod
+```
+
+This adds `lifecycle { ignore_changes = [project_key, project_environments] }` to every repository resource in `existingimported.tf` that doesn't already have one — safe to re-run any time (including after a later re-import regenerates this file and drops the blocks again).
+
+```bash
 terraform apply
 terraform plan
 ```
@@ -139,17 +220,29 @@ terraform plan
 
 Keep `existingimported.tf`. That file is the configuration. S3 state only records which objects Terraform owns. Deleting `existingimported.tf` makes the next plan destroy every imported object.
 
-### 4. Add the modules
+### 4. Bring the module config back
 
-Copy `main.tf`, `locals.tf`, `outputs.tf`, `modules/`, `platform.yaml`, and `projects/` in after the import. Leave them empty of names that are already in `existingimported.tf`.
+From the repo root:
 
-Run `terraform init` again, then `terraform plan`. It should still show no changes until new YAML entries are added.
+```bash
+./restore-after-import.sh prod
+```
+
+This moves `main.tf`, `locals.tf`, `outputs.tf`, `platform.yaml`, and `projects/` back into `environments/prod/`, refusing to run if `imports.tf` is still there or if any of those files already exist in `environments/prod/` (a conflict it won't silently overwrite). Leave `platform.yaml` and `projects/` empty of names that are already in `existingimported.tf`.
+
+```bash
+cd environments/prod
+terraform init
+terraform plan
+```
+
+That plan should still show no changes until new YAML entries are added.
 
 ## Creating new resources
 
-See `example.yaml` at the repo root for every key below shown as a working, validated example — including every repository type, all four `oidc_configurations` provider types, and `oidc_identity_mappings` with several different claim and scope shapes (`sub`, `aud`, `repository`, `repository_owner`, `workflow_ref`, user/groups/roles scopes, `username_pattern`, `groups_pattern`). It's a reference only; Terraform never loads it.
+See `example.yaml` at the repo root for every key below shown as a working, validated example — including every repository type, all four `oidc_configurations` provider types, and `oidc_identity_mappings` with several different claim and scope shapes (`sub`, `aud`, `repository`, `repository_owner`, `workflow_ref`, user/groups/roles scopes, `username_pattern`, `groups_pattern`). It's a reference only; Terraform never loads it. Everything below is per environment — run `terraform plan`/`apply` from inside `environments/prod/` or `environments/staging/`, and the `platform.yaml`/`projects/` paths below are relative to that directory.
 
-Two files between them declare everything new. `platform.yaml` holds objects that are platform-wide or exist independently of any one project. `projects/<project>.yaml` — one file per project team — holds one project's own roles, role assignments, repository assignments, and any new repositories that team owns.
+Two files between them declare everything new. `platform.yaml` holds objects that are platform-wide or exist independently of any one project, for that environment. `projects/<project>.yaml` — one file per project team — holds one project's own roles, role assignments, repository assignments, and any new repositories that team owns.
 
 ### What goes in `platform.yaml`
 
@@ -171,20 +264,20 @@ Two files between them declare everything new. `platform.yaml` holds objects tha
 | Key | Declares |
 |-----|----------|
 | `repositories` | New repositories this project team owns. Each name must start with `<project key>-`. Automatically assigned to this file's `project` — no need to repeat them under `project.repositories`. |
-| `project.key` | Which project this file manages. That project's `key`, `display_name`, and admin settings must already exist in `platform.yaml`'s `projects:` list. |
+| `project.key` | Which project this file manages. That project's `key`, `display_name`, and admin settings must already exist in `platform.yaml`'s `projects:` list, in this same environment. |
 | `project.roles` | Custom roles for this project. |
 | `project.users`, `project.groups` | Assigns an already-existing user or group one of this project's roles, or a built-in role (`Developer`, `Contributor`, `Viewer`, `Project Admin`). SCIM still owns creating the user or group itself — this only assigns a role to one that already exists. |
 | `project.repositories` | Existing or imported repository keys to assign to this project, beyond the ones this file creates itself. |
-| `xray_watches` | Xray watches this project team owns. Same shape as `xray_watches` in `platform.yaml`, with one difference: a watch declared here is automatically scoped to this file's `project.key` — every repository or build it watches must already be assigned to that project. A watch name must be unique across `platform.yaml` and every file under `projects/`. Not available for `xray_security_policies`, `xray_license_policies`, or `xray_operational_risk_policies` — those stay in `platform.yaml` only. |
-| `oidc_identity_mappings` | Maps an OIDC configuration's claims to a JFrog token scope — `provider_name` references an `oidc_configurations` entry from `platform.yaml` (that resource itself cannot be declared here). What actually scopes a mapping to a project is `token_spec.scope` set to `applied-permissions/roles:<project key>:"<role>"`, not which file declares it — a mapping with a `user`/`admin`/`groups` scope stays global no matter which file it's in. A mapping name must be unique across `platform.yaml` and every file under `projects/`. |
+| `xray_watches` | Xray watches this project team owns. Same shape as `xray_watches` in `platform.yaml`, with one difference: a watch declared here is automatically scoped to this file's `project.key` — every repository or build it watches must already be assigned to that project. A watch name must be unique across `platform.yaml` and every file under `projects/`, within this environment. Not available for `xray_security_policies`, `xray_license_policies`, or `xray_operational_risk_policies` — those stay in `platform.yaml` only. |
+| `oidc_identity_mappings` | Maps an OIDC configuration's claims to a JFrog token scope — `provider_name` references an `oidc_configurations` entry from `platform.yaml` (that resource itself cannot be declared here). What actually scopes a mapping to a project is `token_spec.scope` set to `applied-permissions/roles:<project key>:"<role>"`, not which file declares it — a mapping with a `user`/`admin`/`groups` scope stays global no matter which file it's in. A mapping name must be unique across `platform.yaml` and every file under `projects/`, within this environment. |
 
-A project's roles, user/group role assignments, and repository assignment live in exactly one of those two places — directly on its entry in `platform.yaml`, or in its file under `projects/` — never both. The plan fails if a project already managed by a file under `projects/` also declares `roles`, `users`, `groups`, or `repositories` directly in `platform.yaml`.
+A project's roles, user/group role assignments, and repository assignment live in exactly one of those two places, within one environment — directly on its entry in `platform.yaml`, or in its file under `projects/` — never both. The plan fails if a project already managed by a file under `projects/` also declares `roles`, `users`, `groups`, or `repositories` directly in `platform.yaml`.
 
 A repository a project team owns belongs in that project's file under `projects/` — either an existing project's file or a new one named for that project. Do not add a second `.tf` file for it, and do not copy an imported name into the YAML. The modules would treat that name as a new object and JFrog would return "already exists".
 
-A file under `projects/` may declare only `repositories`, `project`, `xray_watches`, and `oidc_identity_mappings` at the top level — nothing else. The plan fails if it declares anything else, if a repository, watch, or identity mapping name is also declared in another file under `projects/` or in `platform.yaml`, if more than one file manages the same project key, or if a file manages a project key that `platform.yaml` does not declare. A repository several projects need lives in its own file under `projects/` (for example `projects/shared.yaml`) so it is declared once.
+A file under `projects/` may declare only `repositories`, `project`, `xray_watches`, and `oidc_identity_mappings` at the top level — nothing else. The plan fails if it declares anything else, if a repository, watch, or identity mapping name is also declared in another file under `projects/` or in `platform.yaml`, if more than one file manages the same project key, or if a file manages a project key that `platform.yaml` does not declare. All of this is scoped to one environment's own Terraform state — the same name can be reused between `environments/prod/` and `environments/staging/` with zero risk of collision, since they're entirely separate configurations. A repository several projects need lives in its own file under `projects/` (for example `projects/shared.yaml`) so it is declared once.
 
-A repository created in a file that also has a `project:` block must have a name starting with `<project key>-`, for example `fstg-npm-local` in `projects/fstg.yaml`. The plan fails otherwise. A file with no `project:` block (a shared repositories file) has no such restriction.
+A repository created in a file that also has a `project:` block must have a name starting with `<project key>-`, for example `fstg-npm-local` in `environments/prod/projects/fstg.yaml`. The plan fails otherwise. A file with no `project:` block (a shared repositories file) has no such restriction.
 
 ```bash
 terraform plan
@@ -195,7 +288,7 @@ Users need a password. The import does not contain passwords, so imported users 
 
 ### Project
 
-The project itself goes in `platform.yaml`:
+The project itself goes in that environment's `platform.yaml` (for example `environments/prod/platform.yaml`):
 
 ```yaml
 projects:
@@ -212,7 +305,7 @@ projects:
       - UPLOADS
 ```
 
-Its roles, role assignments, and repository assignments go in `projects/fortescue.yaml`, referencing the same key:
+Its roles, role assignments, and repository assignments go in that same environment's `projects/fortescue.yaml`, referencing the same key:
 
 ```yaml
 repositories:
@@ -262,7 +355,7 @@ projects:
 
 JFrog stores a custom project environment as `<project key>-<name>`. The YAML uses the short name `UPLOADS`. The projects module sends `Fortescue-UPLOADS` on the role. `DEV` and `PROD` are not prefixed.
 
-An existing repository can be assigned even when its key does not start with the project key. Assigning it moves that repository into the project. Every repository resource in `existingimported.tf` already ignores `project_key` and `project_environments` so assigning one to a project — or moving it to a different project later — never gets undone by the next plan. Give any newly imported repository resource the same `lifecycle { ignore_changes = [project_key, project_environments] }` block before it can be assigned.
+An existing repository can be assigned even when its key does not start with the project key. Assigning it moves that repository into the project. Every repository resource in `existingimported.tf` should already have a `lifecycle { ignore_changes = [project_key, project_environments] }` block (added by `./add-repo-lifecycle.sh <env>` — see "Importing existing resources" step 2) so assigning one to a project — or moving it to a different project later — never gets undone by the next plan. If a repository resource was added by hand instead of through that script, give it the same `lifecycle` block before assigning it.
 
 
 Curation policies whose scope is `specific_groups` cannot be represented by the Xray provider. Those policies were left out of the import. Permissions, Xray policies, watches, and the other curation policies are in `existingimported.tf`. The modules can create new ones from YAML.
@@ -320,7 +413,11 @@ in_sast && /min_severity = "All severities"/ {
 
 ## Useful commands
 
+Run these from inside `environments/prod/` or `environments/staging/` — each environment is its own independent configuration, so there's no `-target`-based cross-environment scoping needed. A plan in one directory can never see or affect the other.
+
 ```bash
+cd environments/prod   # or environments/staging
+
 terraform state list | wc -l
 terraform plan
 terraform apply
@@ -329,9 +426,9 @@ terraform init -upgrade
 
 ## State
 
-State is in S3, configured by `backend.tf` and `backend-configs/s3.hcl`. Export `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` before init, plan, and apply. Use a different state key on the prod branch than on staging.
+Each environment has its own S3 state file, configured by that environment's `backend.tf` plus `backend-configs/s3-prod.hcl` / `s3-staging.hcl`. Export `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` before init, plan, and apply — same AWS credentials can read/write both state objects, but the state objects themselves are completely separate, at different keys in the bucket. A staging `apply` cannot see or change prod's state, and vice versa.
 
-Local state is used only if the `backend "s3"` block in `backend.tf` is commented out and Terraform is initialized again.
+Local state is used only if the `backend "s3"` block in that environment's `backend.tf` is commented out and Terraform is initialized again.
 
 ## .gitignore
 
@@ -344,7 +441,11 @@ terraform.tfstate.backup
 .terraform.tfstate.lock.info
 backend-configs/*.hcl
 !backend-configs/*.example.hcl
+!backend-configs/s3-prod.hcl
+!backend-configs/s3-staging.hcl
 ```
+
+`*.tfvars` and `.terraform/` match at any depth, so `environments/prod/terraform.tfvars` and `environments/staging/.terraform/` are both covered without extra rules. `s3-prod.hcl`/`s3-staging.hcl` are explicitly un-ignored — these are non-sensitive bucket/key/region settings (a shared "TEST key" originally), not credentials, so they stay tracked. Real secrets (JFrog tokens, AWS keys) only ever live in each environment's own `terraform.tfvars` or in CI secrets — never in these files.
 
 ## References
 

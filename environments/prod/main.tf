@@ -44,7 +44,7 @@ resource "terraform_data" "project_files_scope" {
 }
 
 module "repositories" {
-  source = "./modules/repositories"
+  source = "../../modules/repositories"
 
   repositories = local.project_repositories
 
@@ -52,13 +52,13 @@ module "repositories" {
 }
 
 module "groups" {
-  source = "./modules/groups"
+  source = "../../modules/groups"
 
   groups = try(local.config.groups, [])
 }
 
 module "users" {
-  source = "./modules/users"
+  source = "../../modules/users"
 
   users = try(local.config.users, [])
 
@@ -66,7 +66,7 @@ module "users" {
 }
 
 module "projects" {
-  source = "./modules/projects"
+  source = "../../modules/projects"
 
   projects = local.merged_projects
 
@@ -78,7 +78,7 @@ module "projects" {
 }
 
 module "permissions" {
-  source = "./modules/permissions"
+  source = "../../modules/permissions"
 
   permissions = try(local.config.permissions, [])
 
@@ -90,7 +90,7 @@ module "permissions" {
 }
 
 module "xray_policies" {
-  source = "./modules/xray_policies"
+  source = "../../modules/xray_policies"
 
   security_policies         = try(local.config.xray_security_policies, [])
   license_policies          = try(local.config.xray_license_policies, [])
@@ -98,7 +98,7 @@ module "xray_policies" {
 }
 
 module "xray_watches" {
-  source = "./modules/xray_watches"
+  source = "../../modules/xray_watches"
 
   watches = local.xray_watches
 
@@ -109,13 +109,13 @@ module "xray_watches" {
 }
 
 module "oidc_configurations" {
-  source = "./modules/oidc_configurations"
+  source = "../../modules/oidc_configurations"
 
   oidc_configurations = try(local.config.oidc_configurations, [])
 }
 
 module "oidc_identity_mappings" {
-  source = "./modules/oidc_identity_mappings"
+  source = "../../modules/oidc_identity_mappings"
 
   identity_mappings = local.oidc_identity_mappings
 
@@ -123,13 +123,13 @@ module "oidc_identity_mappings" {
 }
 
 module "curation_conditions" {
-  source = "./modules/curation_conditions"
+  source = "../../modules/curation_conditions"
 
   conditions = local.curation_conditions
 }
 
 module "curation_policies" {
-  source = "./modules/curation_policies"
+  source = "../../modules/curation_policies"
 
   policies      = try(local.config.curation_policies, [])
   condition_ids = module.curation_conditions.ids
