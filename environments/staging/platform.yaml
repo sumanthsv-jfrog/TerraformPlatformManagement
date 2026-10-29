@@ -11,4 +11,9 @@ repositories:
     description: Staging Maven local repository
     xray_index: true
 
+  - name: check-libs-release-local23
+    package_type: maven
+    repo_type: local
+    description: Staging Maven local repository
+    xray_index: true
 projects: []
